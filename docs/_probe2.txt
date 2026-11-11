@@ -1,0 +1,10 @@
+# M0 — Windows transparency and windowing proof-of-concept
+
+**Milestone status: NOT SIGNED OFF. Code complete, partially executed.**
+The Windows-specific half of M0 cannot be run outside Windows, and no Windows
+machine was available. Everything below is separated into *actually measured*
+and *not yet measured*.
+
+Date of this record: 2026-11-11
+Executed on: Ubuntu 24.04 (Linux), Python 3.12.3, Panda3D 1.10.16, PySide6 6.12.0,
+no GPU, no X server, no root. **This is not the target platform.**
