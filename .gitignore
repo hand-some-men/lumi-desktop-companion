@@ -1,0 +1,14 @@
+.venv/
+# Local-only test scaffolding (fetched system libraries, downloaded packages).
+.local-libs/
+pkgs/
+build/
+__pycache__/
+*.pyc
+.pytest_cache/
+build/
+dist/
+*.spec
+logs/
+# Chat attachment storage, not project source (the spec lives in docs/).
+files/
