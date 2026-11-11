@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lumi-desktop-companion"
+version = "0.0.1"
+description = "Lumi - 3D Windows desktop companion (unicorn pegasus)"
+requires-python = ">=3.12,<3.13"
+dependencies = []
+
+[project.optional-dependencies]
+# Pinned ranges, not exact pins, so Windows wheels resolve cleanly.
+runtime = [
+  "panda3d>=1.10.13,<1.11",
+  "PySide6-Essentials>=6.6,<6.13",
+]
+dev = [
+  "pytest>=8,<9",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-q"
