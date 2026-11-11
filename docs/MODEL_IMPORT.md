@@ -1,107 +1,119 @@
-# LUMI — Importing a Character Model
+# Importing a Real Lumi Model
 
-This is the procedure for bringing a finished Lumi model into the app. Read it
-before touching an asset; every step has a reason, and skipping one is how a
-model ends up in the app looking wrong.
+How to take a Blender-made Lumi and get it into the application without touching
+code. Read `docs/CHARACTER_SPEC.md` and `docs/RIG_AND_ANIMATION.md` first — this
+is the mechanical procedure for those documents.
 
-## 1. Prepare the file
+**No Lumi model exists yet.** Following this guide is what makes one usable; it is
+not evidence that one exists.
 
-Accepted format: **glTF 2.0 binary (`.glb`)**. Blender's glTF exporter is the
-reference path.
+---
 
-Export settings that matter:
+## 1. Before you start
 
-- Format: `glTF Binary (.glb)`
-- Include: `Selected Objects` only, `Custom Properties` off
-- Transform: `+Y Up` (matches the contract), `Apply Modifiers` on
-- Data: `Armature` on, `Skinning` on, `Shape Keys` off, `Animations` on
-- Animation mode: `Actions` (one glTF animation per action, named as the clip)
-- Compression: none for the first import (Draco needs an extra decoder)
+Install Blender 4.x. The glTF exporter is built in; no add-on needed.
 
-Rename every action to the clip name in `docs/RIG_AND_ANIMATION.md`. A clip
-named `Action.001` is not `walk` and will be reported missing.
+You need: the reference boards, the palette from `CHARACTER_SPEC.md`, and the bone
+list from `RIG_AND_ANIMATION.md`.
 
-## 2. Validate before importing
+## 2. Scene setup
 
-```bash
-python tools/validate_glb.py assets/models/lumi.glb --json build/lumi_report.json
+1. Delete the default cube, camera and light — the app supplies its own light.
+2. `Scene Properties → Units`: Metric, scale 1.0.
+3. Build Lumi facing **−Y in Blender** (the exporter converts to −Z for glTF).
+4. Origin between the front hooves, on the ground plane (`Z = 0` in Blender).
+5. Target height: **0.30 m** for the finished character.
+6. Apply all transforms before export: `Ctrl+A → All Transforms`.
+
+## 3. Rigging
+
+1. Name the armature object `Lumi_Rig`.
+2. Create bones with exactly the names in `RIG_AND_ANIMATION.md`. Use `_L`/`_R`
+   for the character's own sides.
+3. Parent the mesh with automatic weights, then fix by hand:
+   - no vertex with more than 4 influences,
+   - no unweighted vertices (they will not move with the body),
+   - wings, mane and tail need real weight gradients, not rigid assignment.
+4. Use `Armature → Pose Mode` to check that `Head`, `Wing_L/R`, `Tail1-4` and the
+   legs all deform cleanly.
+
+## 4. Animation
+
+1. One Action per clip, named exactly: `idle`, `blink`, `walk`, `run`, `fly`,
+   `sleep`, `yawn`, `happy`, `pet_reaction`, `play_ball` (required), plus optional
+   clips if you have them.
+2. Locomotion is **in place** — the app moves the character.
+3. Looping clips must end on their starting pose, otherwise the wrap pops.
+4. Push each Action to an NLA strip if Blender needs it to export, but export
+   **one glTF animation per clip name**. Duplicated or suffixed names
+   (`walk.001`) are rejected.
+
+## 5. Materials
+
+Follow the material table in `CHARACTER_SPEC.md`: PBR metallic-roughness, coat
+`#EFE6FF`, gold metal 1.0 / rough 0.25, emissive cyan for the horn tip and emblem.
+No baked lighting into textures. Textures ≤ 2048².
+
+## 6. Export
+
+`File → Export → glTF 2.0 (.glb)`:
+
+| Setting | Value |
+|---|---|
+| Format | `glTF Binary (.glb)` |
+| Include | Selected objects only (armature + mesh) |
+| Transform | `+Y Up` **on** |
+| Data | Apply Modifiers on, Cameras off, Lights off |
+| Animation | `Actions`, one animation per action, sampling on, `Optimize Animation Size` off |
+| Skinning | Export all influences (4) |
+| Compression | Draco off (the app reads uncompressed GLB) |
+
+Save to `assets/models/lumi.glb`.
+
+## 7. Validate before importing into the app
+
+```powershell
+python tools\validate_glb.py assets\models\lumi.glb --json docs\lumi_asset_report.json --strict
 ```
 
-Fix **every** error. Read the warnings: they are the ones that produce a model
-that "loads fine" but looks wrong on screen.
+Read the output. Common failures and what they mean:
 
-| Code | Meaning | Typical fix |
-| --- | --- | --- |
-| `GLB001` | container is malformed | re-export |
-| `MESH001` / `MESH003` | no mesh or no triangles | check selection at export |
-| `BONE001` | no skin | enable `Armature` + `Skinning` |
-| `BONE002` | required bones missing | rename bones to the contract |
-| `BONE004` | hierarchy mismatch | reparent in Blender |
-| `CLIP001` | required clips missing | rename/export the actions |
-| `MAT003` | base colour off-palette | use the palette hex values |
-| `CONTENT001` | platform-like node | delete the base/pedestal geometry |
-| `SCALE001` | model is metres too big | scale to ≈ 0.30 m tall |
+| Code | Meaning | Fix |
+|---|---|---|
+| `BONE001` | no skin | the mesh was exported without the armature |
+| `BONE002` | required bones missing | bone names are wrong or bones were not exported |
+| `BONE004` | wrong parent | a bone is attached to the wrong parent |
+| `CLIP001` | required clips missing | action names do not match the table, or actions were not exported |
+| `CLIP002` | unknown clip | a name has a suffix like `.001` |
+| `MAT003` | colour far from palette | material was recoloured, or a texture is doing the colour |
+| `CONTENT001` | looks like a platform | a base/pedestal node was exported |
+| `SCALE001` | model is metres too large | transforms were not applied, or the scene scale is wrong |
 
-## 3. File locations
+Zero errors and zero warnings with `--strict` is the acceptance bar.
 
-```
-assets/models/lumi.glb        the exported character (not committed until final)
-assets/models/lumi_report.json validator output, committed for traceability
-assets/models/_fixture.glb    generated test fixture — never shipped
-```
+## 8. What happens in the application
 
-Test fixtures are generated by `tools/glb_builder.py`; they contain a single
-triangle and must never be presented as a character.
+The app does not need to know the file changed:
 
-## 4. Loading in code
+1. `ClipLibrary` is built from the GLB's animation names.
+2. The behaviour machine requests logical clips (`pet_reaction`, `play_ball`, ...).
+3. The animation layer resolves each request against the real clip list, using the
+   fallback table when something is missing.
+4. If no model is present at all, the procedural fallback still animates breathing
+   and blinking, and the UI must say the model is a placeholder.
 
-The loader is not written yet (M3). When it is, it must:
+## 9. Placeholder policy
 
-1. Load the file with `panda3d.core.Loader` / `loadModel`.
-2. Expose `bundle.getAnimNames()` to `animation.ClipLibrary` — the library, not
-the renderer, decides what exists.
-3. Never fabricate a clip that is missing; report it and use the fallback.
-4. Fail loudly on a missing *required* clip rather than showing a T-pose as if
-   it were idle.
+Until a validated GLB exists at `assets/models/lumi.glb`:
 
-```python
-from lumi.character.animation import ClipLibrary
+- The only 3D geometry in the project is the M0 debug cube, which is **not** a pony
+  and is never shown as Lumi.
+- No screenshot, icon or store listing may present the placeholder as the
+  finished character.
+- The README stays explicit that the character is unmodelled.
 
-library = ClipLibrary(model_bundle.getAnimNames())
-missing = [c for c in REQUIRED_CLIP_NAMES if c not in library]
-if missing:
-    raise RuntimeError(f"asset is missing required clips: {missing}")
-```
+## 10. When the real model lands
 
-## 5. Materials and transparency
-
-- One material per colour region; no atlas textures for the first version.
-- Alpha-blended regions (mane tips) must have `TransparencyAttrib.MAlpha` and be
-  sorted into a transparency bin, otherwise the wings punch holes in the mane.
-- Keep the material count at or below the number of palette entries.
-- Do not bake lighting into base colour; the scene supplies the light so the
-  character matches the desktop brightness.
-
-## 6. Frame cost budget
-
-The whole overlay must stay cheap — it shares the desktop with the user's apps.
-
-| Item | Budget |
-| --- | --- |
-| Rendered frame (320×320, offscreen) | ≤ 4 ms mean |
-| Readback + composite into Qt | ≤ 3 ms mean |
-| Update rate at rest | 30 fps |
-| Update rate while interacting | 60 fps |
-
-Measured M0 numbers on a Linux software pipe are in
-`docs/m0_results_render.json`. They are a floor, not a Windows prediction:
-software rendering says nothing about a real GPU path.
-
-## 7. Checklist before an asset ships
-
-- [ ] `validate_glb.py --strict` passes
-- [ ] renders a unicorn-pegasus, no substitutes
-- [ ] palette matches the measured hex values
-- [ ] height ≈ 0.30 m, feet at y = 0
-- [ ] no platform, disc or pedestal geometry
-- [ ] no static image used anywhere in place of the 3D character
+Record in the commit message: which validator command was run, its verdict, and
+the Blender version used. Attach the front/back/side/three-quarter renders so the
+identity check in `CHARACTER_SPEC.md` §9 can actually be reviewed.
