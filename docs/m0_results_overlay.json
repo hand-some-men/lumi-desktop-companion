@@ -1,0 +1,145 @@
+{
+  "environment": {
+    "platform": "linux",
+    "python": "3.12.3",
+    "machine": "x86_64",
+    "windows_release": null,
+    "windows_build": null
+  },
+  "host": {
+    "platform": "Linux-6.1.102-x86_64-with-glibc2.39"
+  },
+  "args": {
+    "seconds": 4.0,
+    "size": 160,
+    "fps": 20,
+    "driver": "p3tinydisplay",
+    "click_through": false,
+    "json": "docs/m0_results_overlay.json",
+    "capture": "docs/m0_capture_overlay.png"
+  },
+  "checks": [
+    {
+      "check": "offscreen renderer started",
+      "detail": "TinyPanda",
+      "pass": true,
+      "windows_only": false
+    },
+    {
+      "check": "frames composited into the overlay",
+      "detail": "76 frames at target 20 fps",
+      "pass": true,
+      "windows_only": false
+    },
+    {
+      "check": "window is frameless + always-on-top + tool window",
+      "detail": "{\"size\": [160, 160], \"frameless\": true, \"top_most\": true, \"tool_window\": true, \"translucent_attr\": true, \"click_through\": false, \"paints\": 77, \"platform\": \"linux\"}",
+      "pass": true,
+      "windows_only": false
+    },
+    {
+      "check": "translucency attribute accepted",
+      "detail": "True",
+      "pass": true,
+      "windows_only": false
+    },
+    {
+      "check": "click-through mode matches request",
+      "detail": "requested False, got False",
+      "pass": true,
+      "windows_only": false
+    },
+    {
+      "check": "window handle exists",
+      "detail": "windows only",
+      "pass": null,
+      "windows_only": true
+    },
+    {
+      "check": "topmost style set by Windows",
+      "detail": "windows only",
+      "pass": null,
+      "windows_only": true
+    },
+    {
+      "check": "not listed in the taskbar",
+      "detail": "windows only",
+      "pass": null,
+      "windows_only": true
+    },
+    {
+      "check": "per-window DPI readable",
+      "detail": "windows only",
+      "pass": null,
+      "windows_only": true
+    }
+  ],
+  "renderer": {
+    "driver": "TinyPanda",
+    "width": 160,
+    "height": 160,
+    "samples": 1,
+    "has_alpha_texture": false,
+    "readback": "framebuffer_screenshot"
+  },
+  "overlay": {
+    "size": [
+      160,
+      160
+    ],
+    "frameless": true,
+    "top_most": true,
+    "tool_window": true,
+    "translucent_attr": true,
+    "click_through": false,
+    "paints": 77,
+    "platform": "linux"
+  },
+  "frames_composited": 76,
+  "observed_seconds": 3.8,
+  "effective_fps": 20.0,
+  "frame_stats": {
+    "frames": 76,
+    "mean_ms": 0.352,
+    "p50_ms": 0.355,
+    "p95_ms": 0.492,
+    "max_ms": 0.698
+  },
+  "capture": "docs/m0_capture_overlay.png",
+  "windows": {
+    "window_styles": {
+      "supported": false,
+      "reason": "not windows"
+    },
+    "dpi": {
+      "supported": false,
+      "reason": "not windows"
+    },
+    "idle": {
+      "supported": false,
+      "reason": "not windows"
+    },
+    "taskbar": {
+      "supported": false,
+      "reason": "not windows"
+    },
+    "cpu": {
+      "sample_seconds": 0.05,
+      "cpu_percent_of_one_core": 0.13
+    },
+    "monitors": [
+      {
+        "name": "",
+        "geometry": [
+          800,
+          800
+        ],
+        "available": [
+          800,
+          800
+        ],
+        "device_pixel_ratio": 1.0
+      }
+    ]
+  }
+}
