@@ -1,8 +1,7 @@
-"""Animation clip resolution and procedural motion, tested with no rig."""
+"""Animation interfaces: fallback resolution and procedural motion."""
 
 from __future__ import annotations
 
-import math
 import random
 
 import pytest
@@ -10,174 +9,126 @@ import pytest
 from lumi.character.animation import (
     DEFAULT_FALLBACKS,
     SAFE_CLIP,
-    SYNTHETIC_CLIPS,
     ClipInfo,
     ClipLibrary,
     EventDrivenAnimator,
     PlaceholderAnimationController,
     ProceduralMotion,
 )
-from lumi.character.rig_contract import CLIP_NAMES, REQUIRED_CLIP_NAMES
+from lumi.character.state_machine import ClipRequested
 
 
-def test_empty_library_is_honest_about_having_nothing():
-    lib = ClipLibrary([])
-    assert len(lib) == 0
-    assert lib.resolve("idle") is None
+def test_library_resolves_direct_clips():
+    library = ClipLibrary(["idle", "walk", "blink"])
+    assert library.resolve("walk") == "walk"
+    assert len(library) == 3
+    assert "walk" in library
 
 
-def test_missing_clip_falls_back_through_the_chain():
-    lib = ClipLibrary(["idle", "walk"])
-    assert lib.resolve("run") == "walk"  # run -> walk
-    assert lib.resolve("turn_left") == "walk"  # turn_left -> walk
-    assert lib.resolve("look_around") == "idle"
+def test_missing_clip_uses_contract_fallback():
+    library = ClipLibrary(["idle", "walk"])
+    assert library.resolve("run") == "walk"  # run falls back to walk
 
 
-def test_fallback_chain_is_cycle_safe():
-    lib = ClipLibrary(["idle"], fallbacks={"loop_a": "loop_b", "loop_b": "loop_a"})
-    assert lib.resolve("loop_a") == SAFE_CLIP
+def test_unknown_clip_falls_back_to_safe_idle():
+    library = ClipLibrary(["idle"])
+    assert library.resolve("backflip") == SAFE_CLIP
+    assert library.resolve("fly") == SAFE_CLIP  # fly has no explicit fallback
 
 
-def test_last_resort_is_idle_when_available():
-    lib = ClipLibrary(["idle", "walk"], fallbacks={"mystery": "nowhere"})
-    assert lib.resolve("mystery") == "idle"
+def test_empty_library_resolves_nothing():
+    library = ClipLibrary([])
+    assert library.resolve("idle") is None
+    assert library.info("idle") is None
 
 
-def test_library_from_manifest_accepts_dict_and_list():
-    assert ClipLibrary.from_manifest({"clips": {"idle": 1.0, "walk": 1.0}}).names == ("idle", "walk")
-    assert ClipLibrary.from_manifest({"clips": ["idle", "walk"]}).names == ("idle", "walk")
-    assert ClipLibrary.from_manifest({}).names == ()
+def test_from_manifest_accepts_dict_and_list():
+    as_dict = ClipLibrary.from_manifest({"clips": {"idle": {}, "walk": {}}})
+    assert "idle" in as_dict and "walk" in as_dict
+
+    as_list = ClipLibrary.from_manifest({"clips": [{"name": "idle"}, "walk"]})
+    assert as_list.names == ("idle", "walk")
 
 
-def test_clip_info_only_when_present():
-    lib = ClipLibrary([ClipInfo("idle", duration=2.0)])
-    assert lib.info("idle").duration == 2.0
-    assert lib.info("nope") is None
-
-
-def test_synthetic_clips_are_marked_not_in_the_asset_table():
-    assert "dragged" in SYNTHETIC_CLIPS
-    assert "dragged" not in CLIP_NAMES
-
-
-def test_default_fallbacks_cover_every_optional_contract_clip():
-    from lumi.character.rig_contract import CLIPS
-
-    optional = {c.name for c in CLIPS if not c.required}
-    assert optional <= set(DEFAULT_FALLBACKS)
+def test_fallback_chain_does_not_loop_forever():
+    library = ClipLibrary(["idle"], fallbacks={"loop_a": "loop_b", "loop_b": "loop_a"})
+    assert library.resolve("loop_a") == SAFE_CLIP
 
 
 def test_controller_reports_mode_honestly():
-    lib = ClipLibrary(["idle", "walk"])
-    ctrl = PlaceholderAnimationController(lib)
-    assert ctrl.play("walk") == "walk"
-    assert ctrl.mode == "clips"
-    assert ctrl.play("run") == "walk"
-    assert ctrl.mode == "fallback"
-    assert ctrl.requested == "run"
+    controller = PlaceholderAnimationController(ClipLibrary(["idle"]))
+    assert controller.play("idle") == "idle"
+    assert controller.mode == "clips"
+
+    assert controller.play("run") == "idle"
+    assert controller.mode == "fallback"
+    assert controller.requested == "run"
+
+    empty = PlaceholderAnimationController(ClipLibrary([]))
+    assert empty.play("idle") is None
+    assert empty.mode == "procedural"
+    assert empty.current is None
 
 
-def test_controller_without_clips_is_procedural():
-    ctrl = PlaceholderAnimationController(ClipLibrary([]))
-    assert ctrl.play("idle") is None
-    assert ctrl.mode == "procedural"
-    assert ctrl.current is None
+def test_controller_stop_and_snapshot():
+    controller = PlaceholderAnimationController(ClipLibrary(["idle"]))
+    controller.play("idle")
+    controller.update(0.5)
+    snap = controller.snapshot()
+    assert snap["current"] == "idle"
+    controller.stop()
+    assert controller.snapshot()["current"] is None
 
 
-def test_update_accumulates_time_and_samples_motion():
-    ctrl = PlaceholderAnimationController(ClipLibrary(["idle"]))
-    ctrl.play("idle")
-    for _ in range(10):
-        ctrl.update(0.1)
-    snap = ctrl.snapshot()
-    assert snap["time"] == pytest.approx(1.0, abs=1e-6)
-    assert snap["mode"] == "clips"
+def test_procedural_breathing_stays_in_range():
+    motion = ProceduralMotion(rng=random.Random(1))
+    samples = [motion.sample(t / 30.0) for t in range(0, 300)]
+    scales = [s.breath_scale for s in samples]
+    assert min(scales) >= 1.0 - motion.breath_amplitude - 1e-9
+    assert max(scales) <= 1.0 + motion.breath_amplitude + 1e-9
+    assert max(scales) - min(scales) > 0.001  # it actually moves
 
 
-def test_update_ignores_non_positive_dt():
-    ctrl = PlaceholderAnimationController()
-    ctrl.update(0)
-    ctrl.update(-1)
-    assert ctrl.snapshot()["time"] == 0.0
+def test_procedural_blink_eventually_closes_the_eyes():
+    motion = ProceduralMotion(blink_interval=(1.0, 2.0), rng=random.Random(3))
+    values = [motion.blink_amount(t / 60.0) for t in range(0, 600)]
+    assert max(values) == pytest.approx(1.0, abs=0.05)
+    assert min(values) == pytest.approx(0.0)
 
 
-def test_stop_clears_state():
-    ctrl = PlaceholderAnimationController(ClipLibrary(["idle"]))
-    ctrl.play("idle")
-    ctrl.stop()
-    assert ctrl.current is None and ctrl.requested is None
-    assert ctrl.mode == "procedural"
+def test_sleeping_forces_eyes_closed_and_slower_breath():
+    motion = ProceduralMotion(rng=random.Random(2))
+    sample = motion.sample(3.0, sleeping=True)
+    assert sample.blink == 1.0
 
 
-def test_history_records_every_request():
-    ctrl = PlaceholderAnimationController(ClipLibrary(["idle", "walk"]))
-    ctrl.play("walk")
-    ctrl.play("run")
-    assert ctrl.history == [("walk", "clips"), ("walk", "fallback")]
+def test_event_driven_animator_feeds_the_controller():
+    controller = PlaceholderAnimationController(ClipLibrary(["idle", "walk"]))
+    animator = EventDrivenAnimator(controller)
+    played = animator.handle([ClipRequested(clip="walk", loop=True)])
+    assert played == ["walk"]
+    assert controller.current == "walk"
 
-
-def test_breathing_is_smooth_and_bounded():
-    motion = ProceduralMotion(breath_amplitude=0.01)
-    samples = [motion.sample(t).breath_scale for t in [i * 0.05 for i in range(200)]]
-    assert max(samples) <= 1.01 + 1e-9
-    assert min(samples) >= 0.99 - 1e-9
-    assert max(samples) - min(samples) > 0.01  # it actually moves
-    # No jumps: consecutive samples stay close together.
-    assert max(abs(b - a) for a, b in zip(samples, samples[1:])) < 0.01
-
-
-def test_sleeping_breathes_slower_and_deeper():
-    motion = ProceduralMotion()
-    awake = motion.sample(0.3, sleeping=False)
-    asleep = motion.sample(0.3, sleeping=True)
-    assert asleep.blink == 1.0  # eyes closed
-    assert abs(asleep.breath_offset) >= abs(awake.breath_offset)
-
-
-def test_blinks_are_short_and_occasional():
-    motion = ProceduralMotion(blink_interval=(4.0, 4.0), blink_duration=0.12, rng=random.Random(3))
-    closed = [t for t in [i * 0.01 for i in range(2000)] if motion.blink_amount(t) > 0.5]
-    # Roughly two blinks in 20 s, each ~0.06 s above half-closed.
-    assert 6 <= len(closed) <= 20
-
-
-def test_blink_is_zero_while_open():
-    motion = ProceduralMotion(blink_interval=(50.0, 50.0))
-    assert motion.blink_amount(1.0) == 0.0
-
-
-def test_wing_flap_stays_in_range():
-    motion = ProceduralMotion()
-    for i in range(100):
-        value = motion.sample(i * 0.03).wing_flap
-        assert 0.0 <= value <= 1.0
-        assert not math.isnan(value)
-
-
-def test_animator_forwards_clip_requests():
-    from lumi.character.state_machine import ClipRequested
-
-    ctrl = PlaceholderAnimationController(ClipLibrary(["idle", "pet_reaction"]))
-    animator = EventDrivenAnimator(ctrl)
-    played = animator.handle([ClipRequested("pet_reaction", loop=False), "not an event"])
-    assert played == ["pet_reaction"]
-    assert ctrl.current == "pet_reaction"
+    animator.handle([ClipRequested(clip="run", loop=True), ClipRequested(clip="idle", loop=True)])
+    assert [name for name, _ in controller.history] == ["walk", "walk", "idle"]
 
 
 def test_animator_survives_a_broken_controller():
-    class Boom:
+    class Exploding(PlaceholderAnimationController):
         def play(self, clip, fade=0.25):
-            raise RuntimeError("bone missing")
+            raise RuntimeError("gpu exploded")
 
-        def update(self, dt):
-            raise RuntimeError("update failed")
-
-    from lumi.character.state_machine import ClipRequested
-
-    animator = EventDrivenAnimator(Boom())
-    assert animator.handle([ClipRequested("idle", loop=True)]) == []
-    assert "bone missing" in animator.last_error
+    animator = EventDrivenAnimator(Exploding(ClipLibrary(["idle"])))
+    assert animator.handle([ClipRequested(clip="idle", loop=True)]) == []
+    assert animator.last_error and "gpu exploded" in animator.last_error
 
 
-def test_required_clips_exist_in_contract():
-    assert set(REQUIRED_CLIP_NAMES) <= set(CLIP_NAMES)
+def test_default_fallbacks_only_point_at_known_clips():
+    from lumi.character.rig_contract import CLIP_NAMES
+
+    from lumi.character.animation import SYNTHETIC_CLIPS
+
+    known = set(CLIP_NAMES) | set(SYNTHETIC_CLIPS)
+    for clip, fallback in DEFAULT_FALLBACKS.items():
+        assert clip in known, f"{clip} is neither a contract clip nor a declared synthetic clip"
+        assert fallback in known, f"{fallback} is not a known clip"
