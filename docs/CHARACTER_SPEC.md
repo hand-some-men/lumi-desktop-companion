@@ -1,92 +1,139 @@
-# LUMI — Character Specification
+# Lumi — Character Asset Specification
 
-Status: binding for all art and animation work. Nothing in this document has
-been produced as an asset yet; it describes what the asset *must* be.
+**Status: specification only. No 3D model of Lumi exists.**
+Everything here is derived from the three supplied reference boards (hero shot,
+360° board, pose/expression sheet). It describes what must be built and how it
+will be checked — not what has been built.
 
-## 1. Identity
+Machine-readable companion: `src/lumi/character/rig_contract.py`
+Validation: `python tools/validate_glb.py assets/models/lumi.glb`
 
-Lumi is a small winged unicorn (alicorn) companion that lives on the Windows
-desktop. She is a character, not a mascot sprite: every pose, proportion and
-colour below is part of her identity and may not be substituted.
+---
 
-Hard rules, from the project owner:
+## 1. Identity lock
 
-| Rule | Meaning |
-| --- | --- |
-| No substitute characters | Never ship a corgi, cat, generic pony or placeholder creature as "Lumi". A debug cube is acceptable *only* inside test tooling and must be labelled as such. |
-| No static images | A screenshot, sprite sheet, GIF or video is not a stand-in for the 3D character in the app. The running app renders the model. |
-| No circular platform | Lumi stands on the desktop itself. No disc, shadow-puck, plinth or pedestal under her. |
-| Colour identity is fixed | The palette in section 3 is exact. Recolouring is an asset bug, not a style choice. |
+Lumi is a stylised unicorn-pegasus (alicorn) with chibi proportions. These
+properties are load-bearing for recognition and must not change:
 
-## 2. Silhouette and proportions
+1. **Oversized head** — roughly 45% of total height; the face is the focal point.
+2. **Spiral bicone horn**, gold at the base with a cyan-lit tip.
+3. **Two layered feathered wings**, purple-to-white with gold edging, about as
+   long as the body when folded out.
+4. **Layered rainbow mane** (purple/blue/pink) flowing to the character's left,
+   plus a long spiral tail of the same gradient.
+5. **Large violet eyes** with a bright iris gradient, highlight spec and thick
+   lashes; pink inner ears; pink cheek marks.
+6. **Gold accessories**: forehead crown with a blue diamond, hoof caps, collar
+   V-trim, cuffs.
+7. **Purple chest plate** with cyan trim and the diamond/monogram emblem.
+8. **Lavender-white coat** with soft shading — never pure white, never grey.
 
-Desktop-scale: about **0.30 m** tall at the horn tip, roughly **0.28 m** long
-nose to tail base. Chibi proportions, head about 1/3 of the body height.
+## 2. Palette
 
-- **Head** — rounded muzzle, large eyes set wide, small soft ears, spiral horn.
-- **Horn** — slim, spiralled, gold with a cyan tip glow. Never a party cone.
-- **Body** — plump, short barrel; four slender legs with gold hooves.
-- **Wings** — feathered, folded against the barrel at rest, spanning about 1.3×
-  the body length when open. Two feather layers per wing for the folded look.
-- **Mane and tail** — long, flowing, three-colour gradient (purple → blue →
-  pink), always in motion, even at rest.
-- **Eyes** — large, dark with a bright highlight; lids close for blinks.
+| Role | Hex | Linear floats (glTF `baseColorFactor`) |
+|---|---|---|
+| Coat | `#EFE6FF` | 0.937, 0.902, 1.000 |
+| Mane purple | `#B64BFF` | 0.714, 0.294, 1.000 |
+| Mane blue | `#4EC8FF` | 0.306, 0.784, 1.000 |
+| Mane pink | `#FF6EC7` | 1.000, 0.431, 0.780 |
+| Deep purple (plate, shadowed mane) | `#8A5CFF` | 0.541, 0.361, 1.000 |
+| Gold (horn base, crown, hooves, trim) | `#FFC94D` | 1.000, 0.788, 0.302 |
+| Accent cyan (horn tip glow, emblem glow) | `#00E6FF` | 0.000, 0.902, 1.000 |
 
-## 3. Palette (exact)
+The validator warns when a material's base colour is more than 0.20 (RGB
+Euclidean) from the nearest palette entry, which catches an accidental recolour.
 
-| Name | Hex | RGB 0–1 | Use |
-| --- | --- | --- | --- |
-| coat | `#EFE6FF` | 0.937, 0.902, 1.000 | body, head, legs |
-| mane_purple | `#B64BFF` | 0.714, 0.294, 1.000 | mane root, tail root |
-| mane_blue | `#4EC8FF` | 0.306, 0.784, 1.000 | mane mid |
-| mane_pink | `#FF6EC7` | 1.000, 0.431, 0.780 | mane tips, tail tips |
-| deep_purple | `#8A5CFF` | 0.541, 0.361, 1.000 | wing shadow, ear inner |
-| gold | `#FFC94D` | 1.000, 0.788, 0.302 | horn base, hooves |
-| accent_cyan | `#00E6FF` | 0.000, 0.902, 1.000 | horn tip glow, eye highlight |
+## 3. Proportions
 
-The same values live in `src/lumi/character/rig_contract.py` (`PALETTE`) so the
-validator can catch drift automatically. Change the palette in exactly one place.
+From the character board: **W : H : L = 1.0 : 1.0 : 1.2** relative, head ≈ 45% of
+height. In metres the asset is authored at **0.30 m tall** at the origin between
+the front hooves, facing −Z, Y-up. The application scales it to the user's
+`character.scale` setting; the asset itself must not bake in a scale.
 
-## 4. Surface treatment
+## 4. Part-by-part requirements
 
-Soft, toy-like, slightly glossy plastic — the look of a well-made vinyl figure.
+**Head and face**
+- Round muzzle, small closed smile, two blush marks per cheek.
+- Eyes: iris radial gradient (violet to light lavender), dark upper lash line,
+  one large specular highlight plus one small secondary highlight.
+- Eyelids must be able to close fully for `sleep` and `blink`.
+- Ears: tall, rounded, pink inside, able to flick independently.
 
-- Base colour plus subtle gradient, no heavy noise or grunge.
-- Rim light on the coat edges so the silhouette reads on dark and light
-  wallpapers alike.
-- Alpha-tested or alpha-blended transparent mane tips, no opaque cut-out look.
-- Hard specular highlights on horn and hooves only.
+**Horn**
+- Spiral bicone, gold at the base, cyan-lit tip (emissive), seated in the crown.
 
-No baked-in shadows on the ground: the desktop belongs to the user's wallpaper.
-A soft contact shadow may be drawn under the hooves *only* if it fades to fully
-transparent and never forms a visible disc (see the no-platform rule).
+**Mane and tail**
+- Three-colour gradient with visible strand separation, not a smooth blob.
+- Mane falls to the character's left; a forelock crosses the forehead.
+- Tail spirals out and back, roughly two-thirds of body length.
+- Both need enough segments to move with secondary motion (Mane1-3, Tail1-4).
 
-## 5. Scale and origin
+**Wings**
+- Two layers of feathers, gold edge trim, folded by default.
+- Wing root near the shoulder so `fly` reads correctly.
 
-- Origin at the ground between the front hooves, +Y up, facing +Z.
-- 1 unit = 1 metre. Total height ≈ 0.30 m.
-- Feet at y = 0 so the model can be placed by the window origin with no offset.
-- No root motion inside clips: translation is owned by the movement layer.
+**Legs and hooves**
+- Short, stocky legs; gold hoof caps with a purple insert and small diamond.
+- Ground contact at y = 0 with `Root` at the origin.
 
-## 6. Expression and personality
+**Body**
+- Purple chest plate with cyan trim, gold collar V, emblem centred on the plate.
 
-Calm, curious, a little shy. Reactions must be readable at 320 px:
+## 5. Materials and shading
 
-| Situation | What the player sees |
-| --- | --- |
-| Idle | breathing, tail sway, occasional look-around |
-| Petted | leans into the cursor, eyes closed, ears up |
-| Dragged | legs dangle, wings flare slightly for balance |
-| Tired | yawn, then curls up and sleeps |
-| Playing | crouch, pounce, chase the ball |
+| Surface | Requirement |
+|---|---|
+| Coat | PBR base colour, roughness ~0.55, no metallic; soft wrap shading preferred |
+| Mane / tail | Vertex colour or UV gradient across the three mane colours; roughness ~0.35 |
+| Gold | metallic 1.0, roughness ~0.25 |
+| Horn tip, emblem, chest trim | emissive cyan, low intensity so it does not bloom out |
+| Eyes | separate material, high gloss, no metallic; iris as texture |
+| Textures | ≤ 2048², PBR metallic-roughness, no baked lighting |
 
-Expression is conveyed by pose and eye state; no facial texture swaps.
+## 6. Geometry budget
 
-## 7. What "done" means
+| Item | Target |
+|---|---|
+| Total triangles | 25,000 – 40,000 (LOD0) |
+| LOD1 | ≤ 60% of LOD0, used when the user lowers animation quality |
+| Materials | ≤ 8 |
+| Max bone influences per vertex | 4 |
+| Origin | between front hooves, ground level |
+| Forward axis | −Z, Y-up, transforms applied, scale 1.0 |
 
-An asset is acceptable only when:
+## 7. Required expressions and poses
 
-1. `python tools/validate_glb.py <file> --strict` passes;
-2. every required bone and clip in `docs/RIG_AND_ANIMATION.md` exists;
-3. a rendered frame shows the palette above, measured not eyeballed;
-4. it is a unicorn-pegasus, and nothing else.
+Expressions from the sheet: happy, wink, surprised, thinking, sleepy/yawn,
+sleeping. Poses needed by the desktop app: all-four-legs idle stance, walk, run,
+flight, sleep, pet reaction, ball play. `sit` is optional and only if it stays
+recognisably the same character.
+
+## 8. Forbidden
+
+- No circular platform, pedestal or base of any kind.
+- No substitute or lookalike character. Lumi is not a pony from any franchise.
+- No recolouring, simplification of the horn/wings/emblem, or removal of the mane
+  gradient.
+- A static PNG is never an acceptable stand-in for the 3D model.
+- No baked-in camera, lighting rig, or environment in the export.
+
+## 9. Acceptance procedure
+
+1. `python tools/validate_glb.py assets/models/lumi.glb --json docs/lumi_asset_report.json`
+   must pass with zero errors and zero warnings (use `--strict`).
+2. Renders from front, back, left, right and three-quarter views compared against
+   the character board.
+3. Each required clip plays in isolation and loops cleanly (no popping at the wrap).
+4. Checked at 100% and 150% Windows display scaling on a real desktop overlay.
+
+## 10. Current gaps
+
+| Item | Status |
+|---|---|
+| Rigged GLB asset | **does not exist** |
+| Rig / clip contract | defined (`rig_contract.py`) |
+| Validator | implemented and tested against synthetic fixtures |
+| Placeholder | the M0 debug cube stands in for rendering tests only; it is not a pony and is never presented as Lumi |
+
+When a real asset arrives it replaces the placeholder wholesale. Until then no
+document, README or UI may describe Lumi as modelled, rigged, animated or finished.
