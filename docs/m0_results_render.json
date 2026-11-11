@@ -1,0 +1,53 @@
+{
+  "config": {
+    "size": 160,
+    "frames": 40
+  },
+  "renderer": {
+    "driver": "TinyPanda",
+    "width": 160,
+    "height": 160,
+    "samples": 1,
+    "has_alpha_texture": false,
+    "readback": "framebuffer_screenshot"
+  },
+  "frame_stats": {
+    "frames": 40,
+    "mean_ms": 0.119,
+    "p50_ms": 0.113,
+    "p95_ms": 0.157,
+    "max_ms": 0.189
+  },
+  "alpha": {
+    "transparent": 20929,
+    "partial": 1482,
+    "opaque": 3189
+  },
+  "checks": [
+    {
+      "check": "background is transparent",
+      "detail": "corner alpha values [0.0, 0.0, 0.0, 0.0]",
+      "pass": true
+    },
+    {
+      "check": "geometry is drawn and opaque",
+      "detail": "opaque pixels 3189 / 25600",
+      "pass": true
+    },
+    {
+      "check": "semi-transparent pixels exist (not binary alpha)",
+      "detail": "partial pixels 1482",
+      "pass": true
+    },
+    {
+      "check": "centre pixel belongs to the model",
+      "detail": "centre alpha 1.0",
+      "pass": true
+    },
+    {
+      "check": "PNG on disk round-trips with visible pixels",
+      "detail": "m0_capture_render.png = 529 bytes, 1177 sampled visible pixels",
+      "pass": true
+    }
+  ]
+}
